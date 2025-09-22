@@ -1,0 +1,15 @@
+financial_apis:
+  coingecko:
+    base_url: "https://api.coingecko.com/api/v3"
+    rate_limit: 30  
+    endpoints:
+      exchanges: "/exchanges"
+      exchange_tickers: "/exchanges/{id}/tickers"
+      simple_price: "/simple/price"
+  
+  cryptocompare:
+    base_url: "https://min-api.cryptocompare.com/data"
+    rate_limit: 100
+    endpoints:
+      price_multi: "/pricemulti"
+      price_multi_full: "/pricemultifull"
