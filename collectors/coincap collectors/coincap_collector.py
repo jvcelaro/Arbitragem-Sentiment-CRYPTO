@@ -3,10 +3,14 @@ import time
 import logging
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, asdict
+import os
+from dotenv import load_dotenv
 
 from core.decorators import performance_monitor, cache_with_ttl, retry_on_failure
 from core.context_managers import ProfiledExecution
 from api.coincap_api import CoinCapAPI
+
+load_dotenv()
 
 @dataclass
 class ArbitrageData:
@@ -156,10 +160,8 @@ class CoinCapCollector:
         """
         opportunities = []
         
-        # Ordena markets por preço
         markets_sorted = sorted(markets, key=lambda x: float(x.get('priceUsd', 0)))
         
-        # Compara todos os pares possíveis
         for i, buy_market in enumerate(markets_sorted[:-1]):
             for sell_market in markets_sorted[i+1:]:
                 
@@ -299,7 +301,7 @@ async def teste_collector():
         'min_spread_percentage': 0.05   # 0.05% mínimo
     }
     
-    api_key = "48945b05c6dccfe1c0e438b11b8787e58f485cfbff8f2d4a0494995a9c4e974a"
+    api_key = os.getenv("COINCAP_KEY")
     collector = CoinCapCollector(api_key, config)
     
     try:

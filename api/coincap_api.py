@@ -2,7 +2,6 @@ from base_api import BaseCryptoAPI, PriceData, APIResponse
 from typing import Optional, Dict, List, Any
 import asyncio
 from config import Config
-
 import os
 from dotenv import load_dotenv
 
@@ -10,7 +9,7 @@ load_dotenv()
 
 class CoinCapAPI(BaseCryptoAPI):
     def __init__(self, api_key: str):
-        super().__init__(base_url="https://api.coincap.io/v3", api_key=api_key, rate_limit=30)
+        super().__init__(base_url=Config.COINCAP_BASE_URL, api_key=api_key, rate_limit=Config.COINCAP_RATE_LIMIT)
 
     def _get_default_headers(self) -> Dict[str, str]:
 
