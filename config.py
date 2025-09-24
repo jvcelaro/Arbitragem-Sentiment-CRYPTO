@@ -3,11 +3,10 @@ import os
 class Config:
     # APIs
     COINCAP_BASE_URL = "https://rest.coincap.io/v3"
-    CRYPTOCOMPARE_BASE_URL = "https://min-api.cryptocompare.com/data"
-    
+    NEWS_API_URL = "https://newsapi.org/v2"    
     # Rate limits
     COINCAP_RATE_LIMIT = 1000
-    CRYPTOCOMPARE_RATE_LIMIT = 100000
+    NEWS_RATE_LIMIT = 1000
     
     # Arbitragem
     MIN_SPREAD_PERCENTAGE = 0.1

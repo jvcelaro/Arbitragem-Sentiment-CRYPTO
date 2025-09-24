@@ -1,13 +1,14 @@
-from base_api import BaseCryptoAPI, PriceData, APIResponse
+from api.base_api_arbitragem import BaseArbitragemAPI, PriceData, APIResponse, ExchangeData
 from typing import Optional, Dict, List, Any
 import asyncio
-from config import Config
+import time
 import os
 from dotenv import load_dotenv
+from ..config import Config
 
 load_dotenv()
 
-class CoinCapAPI(BaseCryptoAPI):
+class CoinCapAPI(BaseArbitragemAPI):
     def __init__(self, api_key: str):
         super().__init__(base_url=Config.COINCAP_BASE_URL, api_key=api_key, rate_limit=Config.COINCAP_RATE_LIMIT)
 
@@ -38,10 +39,11 @@ class CoinCapAPI(BaseCryptoAPI):
                         rank = coins.get("rank", "Unknown"),
                         symbol = coins.get("symbol", "Unknown"),
                         price_usd = float(coins.get("priceUsd", 0.0)),
+                        market_capusd = coins.get("marketCapUsd", "Unknown"),
                         volume_24h = float(coins.get("volumeUsd24Hr", 0.0)),
-                        price_change_24h = coins.get("id", "Unknown"),
+                        price = coins.get("priceUsd", "Unknown"),
                         changePercent = coins.get("changePercent24Hr", "Unknown"),
-                        market_cap = float(coins.get("marketCapUsd", 0.0)),
+                        vwap24Hr = float(coins.get("vwap24Hr", 0.0)),
 
                     ))
 
@@ -59,10 +61,10 @@ class CoinCapAPI(BaseCryptoAPI):
             
     async def get_assets_per_exhange(self, asset_name: str) -> List[Dict[str, Any]]:
         
-        endpoint = f"/assets/{asset_name}/mercados"
+        endpoint = f"/assets/{asset_name}/markets"
 
         params = {
-            "limit": 50
+            "limit": 10
         }
 
         try:
@@ -96,7 +98,7 @@ class CoinCapAPI(BaseCryptoAPI):
             print(f"ERROR: {e}")
             raise Exception
     
-    async def get_exchanges_data(self) -> List[Dict[str, Any]]:
+    async def get_exchanges_data(self) -> List[ExchangeData]:
 
         endpoint = "/exchanges"
 
@@ -114,20 +116,20 @@ class CoinCapAPI(BaseCryptoAPI):
 
             if response.success and response.data:
                 for exchange in response.data["data"]:
-                    results.append({
-                        'id': exchange.get('exchangeId', exchange.get('id', 'unknown')),
-                        'name': exchange.get('name', 'Unknown'),
-                        'volumeUsd': float(exchange.get('volumeUsd', exchange.get('volume_24h_usd', 0)) or 0),
-                        'tradingPairs': int(exchange.get('tradingPairs', exchange.get('trading_pairs', 0)) or 0),
-                        'socket': exchange.get('socket', False),
-                        'exchangeUrl': exchange.get('exchangeUrl', exchange.get('url', '')),
-                        'percentTotalVolume': float(exchange.get('percentTotalVolume', 0) or 0),
-                        'updated': exchange.get('updated', ''),  
-                        'rank': exchange.get('rank', 999)
-                    })
+                    results.append(ExchangeData(
+                            id = exchange.get("exchangeId"),
+                            name = exchange.get("name"),
+                            volume_24h_usd = exchange.get("volumeUsd"),
+                            trading_pairs = exchange.get("tradingPairs"),
+                            market_share_percentage = exchange.get("percentTotalVolume"),
+                            last_updated = exchange.get("updated"),
+                            timestamp = str(time.time()),
+                            data_source =  "coincap"
+
+                    ))
 
                 
-                return sorted(results, key=lambda x: x['volumeUsd'], reverse=True)
+                return sorted(results, key=lambda x: x.volume_24h_usd, reverse=True)
 
 
             else:
@@ -151,12 +153,12 @@ async def teste_apis():
 
     async with CoinCapAPI(api_key) as api:
 
-        print("Testando top exchanges...")
-        exchanges = await api.get_exchanges_data()
-        print(f"Encontradas {len(exchanges)} exchanges")
-        for exchange in exchanges: 
-            volume = exchange['volumeUsd']
-            print(f"{exchange['name']}: ${volume:,.0f} volume 24h")
+        # print("Testando top exchanges...")
+        # exchanges = await api.get_exchanges_data()
+        # print(f"Encontradas {len(exchanges)} exchanges")
+        # for exchange in exchanges: 
+        #     volume = exchange.volume_24h_usd
+        #     print(f"{exchange.name}: ${volume} volume 24h")
 
 
         print("Testando top assets...")
@@ -164,19 +166,19 @@ async def teste_apis():
         print(f"Encontradas {len(assets)} assets")
         asset_names = []
         for asset in assets: 
-            valuation = asset['changePercent24Hr']
-            print(f"{asset['id']}: ${valuation} valuation 24h")
-            asset_names.append(asset["id"])
-
+            valuation = asset.changePercent
+            print(f"{asset.id}: ${valuation} valuation 24h")
+            asset_names.append(asset.id)
+        
 
 
         print("Testando exchanges for each asset...")
         for name in asset_names:
             data = await api.get_assets_per_exhange(asset_name=name)
             print(f"Encontradas {len(data)} exchanges para {len(name)} cryptos")
-            for exchange in exchanges: 
-                volume = exchange['volumeUsd']
-                print(f"{exchange['name']}: ${volume:,.0f} volume 24h")
+            for exchange in data: 
+                volume = exchange['priceUsd']
+                print(f"Exchange: {exchange['exchangeId']}: ${volume} for {exchange['baseSymbol']}")
        
     
     

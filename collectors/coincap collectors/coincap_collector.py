@@ -9,9 +9,21 @@ from dotenv import load_dotenv
 from core.decorators import performance_monitor, cache_with_ttl, retry_on_failure
 from core.context_managers import ProfiledExecution
 from api.coincap_api import CoinCapAPI
+from api.base_api_arbitragem import ExchangeData, PriceData
 
 load_dotenv()
 
+@dataclass
+class CollectorMetrics:
+    total_time_seconds: float
+    exchanges_collected: int
+    opportunities_found: int
+    api_calls_made: int
+    cache_hits: int
+    errors_count: int
+    timestamp: float
+
+    
 @dataclass
 class ArbitrageData:
     symbol: str
@@ -25,27 +37,6 @@ class ArbitrageData:
     profit_potential: float
     timestamp: float
     data_source: str = "coincap"
-
-@dataclass
-class ExchangeData:
-    id: str
-    name: str
-    volume_24h_usd: float
-    trading_pairs: int
-    market_share_percentage: float
-    last_updated: str
-    timestamp: float
-    data_source: str = "coincap"
-
-@dataclass
-class CollectorMetrics:
-    total_time_seconds: float
-    exchanges_collected: int
-    opportunities_found: int
-    api_calls_made: int
-    cache_hits: int
-    errors_count: int
-    timestamp: float
 
 class CoinCapCollector:
     
@@ -86,25 +77,9 @@ class CoinCapCollector:
                         self.logger.error(f"API retornou tipo incorreto: {type(exchanges_raw)}")
                         self.metrics.errors_count += 1
                         return []
-                    
-                    exchanges_processed = []
-                    for exchange in exchanges_raw:
-                        try:
-                            processed = ExchangeData(
-                                id=exchange.get('id', 'unknown'),
-                                name=exchange.get('name', 'Unknown'),
-                                volume_24h_usd=float(exchange.get('volumeUsd', 0)),
-                                trading_pairs=int(exchange.get('tradingPairs', 0)),
-                                market_share_percentage=float(exchange.get('percentTotalVolume', 0)),
-                                last_updated=exchange.get('updated', ''),
-                                timestamp=time.time()
-                            )
-                            exchanges_processed.append(processed)
-                        except (ValueError, KeyError) as e:
-                            self.logger.warning(f"Erro ao processar exchange {exchange}: {e}")
-                            self.metrics.errors_count += 1
-                            continue
-                    
+
+                    exchanges_processed = exchanges_raw
+                                        
                     self.metrics.exchanges_collected = len(exchanges_processed)
                     self.logger.info(f"Coletadas {len(exchanges_processed)} exchanges com sucesso")
                     
@@ -140,7 +115,6 @@ class CoinCapCollector:
                         self.logger.info(f"Poucos markets líquidos para {symbol} (min volume ${self.min_volume_threshold:,.0f})")
                         return []
                     
-                    # Identifica oportunidades de arbitragem
                     opportunities = self._analyze_arbitrage_opportunities(liquid_markets, symbol)
                     
                     self.metrics.opportunities_found = len(opportunities)
@@ -154,10 +128,7 @@ class CoinCapCollector:
                     return []
     
     def _analyze_arbitrage_opportunities(self, markets: List[Dict], symbol: str) -> List[ArbitrageData]:
-        """
-        Análise interna das oportunidades de arbitragem.
-        Método privado que implementa a lógica de negócio.
-        """
+      
         opportunities = []
         
         markets_sorted = sorted(markets, key=lambda x: float(x.get('priceUsd', 0)))
@@ -173,13 +144,11 @@ class CoinCapCollector:
                 
                 spread_percentage = ((sell_price - buy_price) / buy_price) * 100
                 
-                # Filtro por spread mínimo
                 if spread_percentage >= self.min_spread_percentage:
                     
                     buy_volume = float(buy_market.get('volumeUsd24Hr', 0))
                     sell_volume = float(sell_market.get('volumeUsd24Hr', 0))
                     
-                    # Estimativa conservadora de lucro (0.1% do menor volume)
                     profit_potential = (sell_price - buy_price) * min(buy_volume, sell_volume) * 0.001
                     
                     opportunity = ArbitrageData(
@@ -197,7 +166,6 @@ class CoinCapCollector:
                     
                     opportunities.append(opportunity)
         
-        # Ordena por spread (melhores oportunidades primeiro)
         return sorted(opportunities, key=lambda x: x.spread_percentage, reverse=True)
     
     @performance_monitor
@@ -221,16 +189,13 @@ class CoinCapCollector:
             }
             
             try:
-                # Coleta exchanges (em paralelo com primeira análise de arbitragem)
                 tasks = [
                     self.collect_exchanges_data(),
                     self.collect_arbitrage_opportunities(self.target_symbols[0])
                 ]
                 
-                # Executa tarefas principais em paralelo
                 exchanges, first_opportunities = await asyncio.gather(*tasks, return_exceptions=True)
                 
-                # Processa resultados das tarefas principais
                 if isinstance(exchanges, list):
                     results['exchanges'] = exchanges
                 else:
@@ -239,7 +204,6 @@ class CoinCapCollector:
                 if isinstance(first_opportunities, list):
                     results['arbitrage_opportunities'][self.target_symbols[0]] = first_opportunities
                 
-                # Coleta arbitragem para símbolos restantes
                 remaining_symbols = self.target_symbols[1:]
                 if remaining_symbols:
                     arbitrage_tasks = [
@@ -255,7 +219,6 @@ class CoinCapCollector:
                         else:
                             self.logger.error(f"Erro na arbitragem para {symbol}: {opportunities}")
                 
-                # Finaliza métricas
                 self.metrics.total_time_seconds = time.time() - collection_start
                 self.metrics.timestamp = time.time()
                 
@@ -275,7 +238,6 @@ class CoinCapCollector:
         return self.metrics
     
     def reset_metrics(self):
-        """Reseta métricas para nova coleta"""
         self.metrics = CollectorMetrics(
             total_time_seconds=0,
             exchanges_collected=0,
@@ -288,49 +250,42 @@ class CoinCapCollector:
 
 
 async def teste_collector():
-    """
-    Demonstra como usar o collector integrado com sua arquitetura.
-    """
+
     print("CoinCap Collector - Teste Completo")
     print("=" * 50)
     
-    # Configuração personalizada
     config = {
         'target_symbols': ['bitcoin', 'ethereum', 'cardano'],
-        'min_volume_threshold': 50000,  # $50k mínimo
-        'min_spread_percentage': 0.05   # 0.05% mínimo
+        'min_volume_threshold': 50000,  
+        'min_spread_percentage': 0.05   
     }
     
     api_key = os.getenv("COINCAP_KEY")
     collector = CoinCapCollector(api_key, config)
     
     try:
-        # Coleta completa
-        print("\n🔄 Iniciando coleta completa...")
+        print("Iniciando coleta completa...")
         data = await collector.collect_comprehensive_data()
         
-        # Resultados
-        print(f"\n📊 RESULTADOS:")
+        print(f"RESULTADOS:")
         print(f"Exchanges coletadas: {len(data['exchanges'])}")
         
         for symbol, opportunities in data['arbitrage_opportunities'].items():
             print(f"{symbol}: {len(opportunities)} oportunidades")
             
-            # Mostra melhor oportunidade
             if opportunities:
                 best = opportunities[0]
-                print(f"  🔥 Melhor: {best.spread_percentage:.2f}% "
+                print(f"Melhor: {best.spread_percentage:.2f}% "
                       f"({best.buy_exchange} → {best.sell_exchange})")
         
-        # Métricas
         metrics = collector.get_metrics()
-        print(f"\n⏱️ PERFORMANCE:")
+        print(f"PERFORMANCE:")
         print(f"Tempo total: {metrics.total_time_seconds:.2f}s")
         print(f"API calls: {metrics.api_calls_made}")
         print(f"Erros: {metrics.errors_count}")
         
     except Exception as e:
-        print(f"❌ Erro no exemplo: {e}")
+        print(f"Erro no exemplo: {e}")
         import traceback
         traceback.print_exc()
 
