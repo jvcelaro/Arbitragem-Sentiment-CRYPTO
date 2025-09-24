@@ -26,10 +26,23 @@ class PriceData:
     rank: str
     symbol: str
     price_usd: float
+    market_capusd: str
     volume_24h: float
-    price_change_24h: float
+    price: float
     changePercent: str
-    market_cap: Optional[float] = None
+    vwap24Hr: Optional[float] = None
+
+@dataclass
+class ExchangeData:
+    id: str
+    name: str
+    volume_24h_usd: float
+    trading_pairs: int
+    market_share_percentage: float
+    last_updated: str
+    timestamp: str
+    data_source: str = "coincap"
+
     
 
 class BaseCryptoAPI(ABC):
@@ -121,5 +134,5 @@ class BaseCryptoAPI(ABC):
         pass
     
     @abstractmethod
-    async def get_assets_per_exhange(self, asset_name: str) -> List[Dict[str, Any]]:
+    async def get_assets_per_exhange(self, asset_name: str) -> List[ExchangeData]:
         pass
