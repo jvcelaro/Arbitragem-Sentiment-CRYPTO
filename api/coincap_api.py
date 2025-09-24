@@ -1,15 +1,16 @@
-from base_api import BaseCryptoAPI, PriceData, APIResponse, ExchangeData
+from api.base_api_arbitragem import BaseArbitragemAPI, PriceData, APIResponse, ExchangeData
 from typing import Optional, Dict, List, Any
 import asyncio
 import time
 import os
 from dotenv import load_dotenv
+from ..config import Config
 
 load_dotenv()
 
-class CoinCapAPI(BaseCryptoAPI):
+class CoinCapAPI(BaseArbitragemAPI):
     def __init__(self, api_key: str):
-        super().__init__(base_url=os.getenv("COINCAP_BASE_URL"), api_key=api_key, rate_limit=int(os.getenv("COINCAP_RATE_LIMIT")))
+        super().__init__(base_url=Config.COINCAP_BASE_URL, api_key=api_key, rate_limit=Config.COINCAP_RATE_LIMIT)
 
     def _get_default_headers(self) -> Dict[str, str]:
 

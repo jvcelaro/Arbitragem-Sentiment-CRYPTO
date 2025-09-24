@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 from core.decorators import performance_monitor, cache_with_ttl, retry_on_failure
 from core.context_managers import ProfiledExecution
 from api.coincap_api import CoinCapAPI
-from api.base_api import ExchangeData, PriceData
+from api.base_api_arbitragem import ExchangeData, PriceData
 
 load_dotenv()
 
@@ -90,86 +90,83 @@ class CoinCapCollector:
                     self.metrics.errors_count += 1
                     return []
     
-    # @performance_monitor
-    # @cache_with_ttl(ttl=60) 
-    # async def collect_arbitrage_opportunities(self, symbol: str = 'bitcoin') -> List[ArbitrageData]:
+    @performance_monitor
+    @cache_with_ttl(ttl=60) 
+    async def collect_arbitrage_opportunities(self, symbol: str = 'bitcoin') -> List[ArbitrageData]:
       
-    #     with ProfiledExecution(f"arbitrage_detection_{symbol}"):
+        with ProfiledExecution(f"arbitrage_detection_{symbol}"):
             
-    #         async with CoinCapAPI(self.api_key) as api:
-    #             self.metrics.api_calls_made += 1
+            async with CoinCapAPI(self.api_key) as api:
+                self.metrics.api_calls_made += 1
                 
-    #             try:
-    #                 markets = await api.get_arbitrage_opportunities(symbol)
+                try:
+                    markets = await api.get_arbitrage_opportunities(symbol)
                     
-    #                 if len(markets) < 2:
-    #                     self.logger.warning(f"Poucos markets encontrados para {symbol}: {len(markets)}")
-    #                     return []
+                    if len(markets) < 2:
+                        self.logger.warning(f"Poucos markets encontrados para {symbol}: {len(markets)}")
+                        return []
                     
-    #                 liquid_markets = [
-    #                     m for m in markets 
-    #                     if float(m.get('volumeUsd24Hr', 0)) >= self.min_volume_threshold
-    #                 ]
+                    liquid_markets = [
+                        m for m in markets 
+                        if float(m.get('volumeUsd24Hr', 0)) >= self.min_volume_threshold
+                    ]
                     
-    #                 if len(liquid_markets) < 2:
-    #                     self.logger.info(f"Poucos markets líquidos para {symbol} (min volume ${self.min_volume_threshold:,.0f})")
-    #                     return []
+                    if len(liquid_markets) < 2:
+                        self.logger.info(f"Poucos markets líquidos para {symbol} (min volume ${self.min_volume_threshold:,.0f})")
+                        return []
                     
-    #                 opportunities = self._analyze_arbitrage_opportunities(liquid_markets, symbol)
+                    opportunities = self._analyze_arbitrage_opportunities(liquid_markets, symbol)
                     
-    #                 self.metrics.opportunities_found = len(opportunities)
-    #                 self.logger.info(f"Encontradas {len(opportunities)} oportunidades para {symbol}")
+                    self.metrics.opportunities_found = len(opportunities)
+                    self.logger.info(f"Encontradas {len(opportunities)} oportunidades para {symbol}")
                     
-    #                 return opportunities
+                    return opportunities
                     
-    #             except Exception as e:
-    #                 self.logger.error(f"Erro na coleta de arbitragem para {symbol}: {e}")
-    #                 self.metrics.errors_count += 1
-    #                 return []
+                except Exception as e:
+                    self.logger.error(f"Erro na coleta de arbitragem para {symbol}: {e}")
+                    self.metrics.errors_count += 1
+                    return []
     
-    # def _analyze_arbitrage_opportunities(self, markets: List[Dict], symbol: str) -> List[ArbitrageData]:
-    #     """
-    #     Análise interna das oportunidades de arbitragem.
-    #     Método privado que implementa a lógica de negócio.
-    #     """
-    #     opportunities = []
+    def _analyze_arbitrage_opportunities(self, markets: List[Dict], symbol: str) -> List[ArbitrageData]:
+      
+        opportunities = []
         
-    #     markets_sorted = sorted(markets, key=lambda x: float(x.get('priceUsd', 0)))
+        markets_sorted = sorted(markets, key=lambda x: float(x.get('priceUsd', 0)))
         
-    #     for i, buy_market in enumerate(markets_sorted[:-1]):
-    #         for sell_market in markets_sorted[i+1:]:
+        for i, buy_market in enumerate(markets_sorted[:-1]):
+            for sell_market in markets_sorted[i+1:]:
                 
-    #             buy_price = float(buy_market.get('priceUsd', 0))
-    #             sell_price = float(sell_market.get('priceUsd', 0))
+                buy_price = float(buy_market.get('priceUsd', 0))
+                sell_price = float(sell_market.get('priceUsd', 0))
                 
-    #             if buy_price <= 0 or sell_price <= 0:
-    #                 continue
+                if buy_price <= 0 or sell_price <= 0:
+                    continue
                 
-    #             spread_percentage = ((sell_price - buy_price) / buy_price) * 100
+                spread_percentage = ((sell_price - buy_price) / buy_price) * 100
                 
-    #             if spread_percentage >= self.min_spread_percentage:
+                if spread_percentage >= self.min_spread_percentage:
                     
-    #                 buy_volume = float(buy_market.get('volumeUsd24Hr', 0))
-    #                 sell_volume = float(sell_market.get('volumeUsd24Hr', 0))
+                    buy_volume = float(buy_market.get('volumeUsd24Hr', 0))
+                    sell_volume = float(sell_market.get('volumeUsd24Hr', 0))
                     
-    #                 profit_potential = (sell_price - buy_price) * min(buy_volume, sell_volume) * 0.001
+                    profit_potential = (sell_price - buy_price) * min(buy_volume, sell_volume) * 0.001
                     
-    #                 opportunity = ArbitrageData(
-    #                     symbol=symbol,
-    #                     buy_exchange=buy_market.get('exchangeId', 'unknown'),
-    #                     sell_exchange=sell_market.get('exchangeId', 'unknown'),
-    #                     buy_price=buy_price,
-    #                     sell_price=sell_price,
-    #                     spread_percentage=spread_percentage,
-    #                     buy_volume_24h=buy_volume,
-    #                     sell_volume_24h=sell_volume,
-    #                     profit_potential=profit_potential,
-    #                     timestamp=time.time()
-    #                 )
+                    opportunity = ArbitrageData(
+                        symbol=symbol,
+                        buy_exchange=buy_market.get('exchangeId', 'unknown'),
+                        sell_exchange=sell_market.get('exchangeId', 'unknown'),
+                        buy_price=buy_price,
+                        sell_price=sell_price,
+                        spread_percentage=spread_percentage,
+                        buy_volume_24h=buy_volume,
+                        sell_volume_24h=sell_volume,
+                        profit_potential=profit_potential,
+                        timestamp=time.time()
+                    )
                     
-    #                 opportunities.append(opportunity)
+                    opportunities.append(opportunity)
         
-    #     return sorted(opportunities, key=lambda x: x.spread_percentage, reverse=True)
+        return sorted(opportunities, key=lambda x: x.spread_percentage, reverse=True)
     
     @performance_monitor
     async def collect_comprehensive_data(self) -> Dict[str, Any]:
@@ -267,10 +264,10 @@ async def teste_collector():
     collector = CoinCapCollector(api_key, config)
     
     try:
-        print("\n🔄 Iniciando coleta completa...")
+        print("Iniciando coleta completa...")
         data = await collector.collect_comprehensive_data()
         
-        print(f"\n📊 RESULTADOS:")
+        print(f"RESULTADOS:")
         print(f"Exchanges coletadas: {len(data['exchanges'])}")
         
         for symbol, opportunities in data['arbitrage_opportunities'].items():
@@ -278,7 +275,7 @@ async def teste_collector():
             
             if opportunities:
                 best = opportunities[0]
-                print(f"  🔥 Melhor: {best.spread_percentage:.2f}% "
+                print(f"Melhor: {best.spread_percentage:.2f}% "
                       f"({best.buy_exchange} → {best.sell_exchange})")
         
         metrics = collector.get_metrics()

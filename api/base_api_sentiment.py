@@ -5,59 +5,46 @@ import asyncio
 import aiohttp
 import time
 
-@dataclass
-class APIResponse:
-
-    data: Any
-    status_code: int
-    response_time_ms: float
-    success: bool
-    error_message: Optional[str] = None
-    timestamp: float = None
-    
-    def __post_init__(self):
-        if self.timestamp is None:
-            self.timestamp = time.time()
+from base_api_arbitragem import APIResponse
 
 @dataclass
-class PriceData:
+class NewsArticle:
+    """Estrutura padronizada para artigos de notícias"""
+    title: str
+    description: str
+    url: str
+    source: str
+    published_at: str
+    content: Optional[str] = None
+    sentiment_score: Optional[float] = None
+    language: str = "en"
 
-    id: str
-    rank: str
+@dataclass
+class SentimentData:
     symbol: str
-    price_usd: float
-    market_capusd: str
-    volume_24h: float
-    price: float
-    changePercent: str
-    vwap24Hr: Optional[float] = None
+    overall_sentiment: float  
+    positive_ratio: float    
+    negative_ratio: float   
+    neutral_ratio: float   
+    news_count: int
+    confidence_score: float 
+    timestamp: float
+    data_source: str
 
-@dataclass
-class ExchangeData:
-    id: str
-    name: str
-    volume_24h_usd: float
-    trading_pairs: int
-    market_share_percentage: float
-    last_updated: str
-    timestamp: str
-    data_source: str = "coincap"
-
+class BaseSentimentAPI(ABC):
     
-
-class BaseCryptoAPI(ABC):
-    
-    def __init__(self, base_url: str, api_key: Optional[str] = None, rate_limit: int = 100):
+    def __init__(self, base_url: str, api_key: Optional[str] = None, rate_limit: int = 1000):
         self.base_url = base_url.rstrip('/')
         self.api_key = api_key
-        self.rate_limit = rate_limit  
+        self.rate_limit = rate_limit
         self.session: Optional[aiohttp.ClientSession] = None
         self.request_count = 0
         self.last_minute_start = time.time()
     
     async def __aenter__(self):
+        """Context manager entry"""
         self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10),
+            timeout=aiohttp.ClientTimeout(total=30), 
             headers=self._get_default_headers()
         )
         return self
@@ -67,10 +54,19 @@ class BaseCryptoAPI(ABC):
             await self.session.close()
     
     def _get_default_headers(self) -> Dict[str, str]:
-        return {
+        headers = {
             'User-Agent': f'{self.__class__.__name__}/1.0',
             'Accept': 'application/json'
         }
+        
+        if self.api_key:
+            headers.update(self._get_auth_headers())
+        
+        return headers
+    
+    def _get_auth_headers(self) -> Dict[str, str]:
+        
+        return {'X-API-Key': self.api_key}
     
     async def _handle_rate_limit(self):
         current_time = time.time()
@@ -97,6 +93,7 @@ class BaseCryptoAPI(ABC):
         try:
             async with self.session.get(url, params=params) as response:
                 response_time = (time.time() - start_time) * 1000
+                print(response)
                 
                 if response.status == 200:
                     data = await response.json()
@@ -124,15 +121,14 @@ class BaseCryptoAPI(ABC):
                 success=False,
                 error_message=str(e)
             )
-        
+    
     @abstractmethod
-    async def get_assets_prices(self) -> List[PriceData]:
+    async def get_news(self, query: str, limit: int = 100) -> List[NewsArticle]:
+        """Busca notícias para uma query específica"""
         pass
     
     @abstractmethod
-    async def get_exchanges_data(self) -> List[Dict[str, Any]]:
+    async def get_crypto_news(self, symbol: str, limit: int = 50) -> List[NewsArticle]:
+        """Busca notícias específicas sobre uma criptomoeda"""
         pass
-    
-    @abstractmethod
-    async def get_assets_per_exhange(self, asset_name: str) -> List[ExchangeData]:
-        pass
+
